@@ -1,0 +1,135 @@
+# ATUS Data Processing Reference for Time Use by Activity Group
+
+## Files You'll Need
+
+**Activity Summary File** is your primary file—it contains total minutes per activity per respondent in a single row per person. Variables starting with lowercase "t" (e.g., `t010101`) hold total minutes for each 6-digit activity code.
+
+**Respondent File** contains demographics, employment status, and survey weights. Can be merged with Activity Summary via `TUCASEID`.
+
+---
+
+## Key Variables
+
+### Identifying Full-Time Workers
+| Variable | Description | Values |
+|----------|-------------|--------|
+| `TELFS` | Labor force status | 1 = Employed at work, 2 = Employed absent |
+| `TRDPFTPT` | Full-time/part-time status | 1 = Full time, 2 = Part time |
+
+**Filter**: `TELFS IN (1,2) AND TRDPFTPT = 1`
+
+### Weekday vs Weekend
+| Variable | Description | Values |
+|----------|-------------|--------|
+| `TUDIARYDAY` | Day of diary day | 1=Sun, 2=Mon, 3=Tue, 4=Wed, 5=Thu, 6=Fri, 7=Sat |
+
+**Weekday**: `TUDIARYDAY IN (2,3,4,5,6)`  
+**Weekend**: `TUDIARYDAY IN (1,7)`
+
+### Survey Weight
+| Variable | Description |
+|----------|-------------|
+| `TUFINLWGT` | ATUS final weight (required for population estimates) |
+
+---
+
+## Activity Code Structure
+
+Activities use 6-digit codes combining three tiers:
+- **Tier 1** (digits 1-2): Major category (01-50)
+- **Tier 2** (digits 3-4): Subcategory
+- **Tier 3** (digits 5-6): Detailed activity
+
+The **Activity Lexicon** (www.bls.gov/tus/lexicons/lexiconwex2024.pdf) defines all codes. Common major categories:
+
+| Tier 1 | Category |
+|--------|----------|
+| 01 | Personal Care (includes sleep: 0101xx) |
+| 02 | Household Activities |
+| 03 | Caring for Household Members |
+| 05 | Work & Work-Related |
+| 06 | Education |
+| 12 | Socializing, Relaxing, Leisure |
+| 13 | Sports, Exercise, Recreation |
+| 15 | Volunteer Activities |
+| 18 | Travel |
+
+---
+
+## Computing Time by Activity Group
+
+In the Activity Summary file, sum the relevant `t######` variables. For example:
+- **Sleep**: `t010101` (sleeping) + `t010102` (sleeplessness)
+- **Work**: Sum all `t05####` variables
+- **Leisure**: Sum all `t12####` and `t13####` variables
+
+Each value is in **minutes**. Divide by 60 for hours.
+
+---
+
+## Weighted Mean Calculation
+
+```
+Weighted Average = Σ(TUFINLWGT × minutes) / Σ(TUFINLWGT)
+```
+
+Apply this separately for weekday and weekend subsamples.
+
+---
+
+## Missing Values
+
+Standard missing codes across variables:
+- `-1` = Blank
+- `-2` = Don't know
+- `-3` = Refused
+
+Exclude these from calculations.
+
+
+## Potential Issues in ATUS Time Use Estimation
+
+### 1. Weekend Oversampling — **NEEDS CORRECTION (if computing overall average)**
+
+ATUS deliberately samples weekend days and weekday days at roughly equal rates (≈50/50), but real weeks have 5 weekdays and 2 weekend days. 
+
+**If computing weekday and weekend averages separately**: No correction needed—you're stratifying anyway.
+
+**If computing a single "average day" estimate**: Weight the results:
+```
+Overall = (5/7 × weekday_avg) + (2/7 × weekend_avg)
+```
+
+---
+
+### 2. Survey Weights (TUFINLWGT) — **MUST USE**
+
+The weights correct for:
+- Probability of selection (some households more likely to be sampled)
+- Non-response (certain demographics respond at different rates)
+- Post-stratification to Census population totals
+
+Without weights, your estimates won't represent the US population—they'll just describe ATUS respondents.
+
+---
+
+### 7. CPS-to-ATUS Lag — **POTENTIAL ISSUE FOR EMPLOYMENT STATUS**
+
+Employment variables come from CPS interviews conducted 2-5 months before the ATUS diary day. Someone classified as full-time employed may have changed status by the diary day.
+
+`TRERNUPD = 1` indicates earnings were updated in ATUS. No equivalent flag exists for employment status changes, but this affects a small fraction of cases.
+
+---
+
+## Summary Table
+
+| Issue | Correction Needed? | Notes |
+|-------|-------------------|-------|
+| Weekend oversampling | **Yes** (for overall average) | 5/7 weekday + 2/7 weekend |
+| Survey weights | **Yes, always** | Use `TUFINLWGT` |
+| Holidays | Maybe | Depends on research question |
+| Seasonality | No | Built into annual weights |
+| Allocated values | Rarely | Check if precision-critical |
+| Single-day design | No | Population estimates still valid |
+| Employment status lag | Minor | Small percentage affected |
+| Age topcoding | No | Irrelevant for working-age sample |
